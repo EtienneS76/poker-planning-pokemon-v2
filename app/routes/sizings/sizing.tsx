@@ -5,7 +5,7 @@ import { api } from "convex/_generated/api";
 import { convexClient } from "~/lib/convexClient.server";
 import { data, redirect } from "react-router";
 import { getOrCreateUser } from "~/lib/userSession.server";
-import { pointCards, randomNumber } from "~/lib/utils";
+import { cn, pointCards, randomNumber } from "~/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import { UnitCard } from "~/components/UnitCard";
 import { Card } from "~/components/ui/card";
@@ -16,7 +16,8 @@ import { Fade } from "~/components/animate-ui/primitives/effects/fade";
 import { Zoom } from "~/components/animate-ui/primitives/effects/zoom";
 import { UnitAvatar } from "~/components/UnitAvatar";
 import Confetti from "react-confetti";
-import { playFanfare } from "~/lib/audio";
+import { useSound } from "~/contexts/SoundContext";
+import { Eye } from "lucide-react";
 
 export async function loader({ request, params }: Route.LoaderArgs) {
   const { user, cookie } = await getOrCreateUser(request);
@@ -67,11 +68,32 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 
 const countdownDuration = 3;
 
+const playTone = (frequency: number, duration = 0.15) => {
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    const ctx = new AudioCtx();
+    const oscillator = ctx.createOscillator();
+    const gain = ctx.createGain();
+    oscillator.type = "sine";
+    oscillator.frequency.value = frequency;
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
+    oscillator.connect(gain);
+    gain.connect(ctx.destination);
+    oscillator.start();
+    oscillator.stop(ctx.currentTime + duration);
+    oscillator.onended = () => ctx.close();
+  } catch (e) {
+    console.log("Impossible de jouer le son :", e);
+  }
+};
+
 export default function SizingPage({
   loaderData,
   params,
 }: Route.ComponentProps) {
   const { userId } = loaderData;
+  const { soundEnabled } = useSound();
   const [countDownValue, setCountDownValue] = React.useState(countdownDuration);
   const sizing = useQuery(api.sizings.getById, { id: params.sizingId });
   const presenceState = usePresence(api.presence, params.sizingId, userId);
@@ -83,6 +105,63 @@ export default function SizingPage({
   const revealAll = useMutation(api.sizings.revealAll);
   const hideAll = useMutation(api.sizings.hideAll);
   const clearVotes = useMutation(api.participants.clearVotesBySizingId);
+
+  // ──────────────────────────────────────────────────────────────
+  // "Ding" quand un nouveau joueur rejoint
+  // ──────────────────────────────────────────────────────────────
+  const knownOnlineUserIdsRef = React.useRef<Set<string>>(new Set());
+
+  React.useEffect(() => {
+    if (!presenceState) return;
+
+    const currentOnlineUserIds = new Set(
+      presenceState.filter((p) => p.online).map((p) => p.userId),
+    );
+
+    const isFirstRun = knownOnlineUserIdsRef.current.size === 0;
+    const hasNewJoiner = [...currentOnlineUserIds].some(
+      (id) => !knownOnlineUserIdsRef.current.has(id),
+    );
+
+    if (!isFirstRun && hasNewJoiner && soundEnabled) {
+      playTone(880, 0.2);
+    }
+
+    knownOnlineUserIdsRef.current = currentOnlineUserIds;
+  }, [presenceState, soundEnabled]);
+
+  // ──────────────────────────────────────────────────────────────
+  // "Dong" quand tous les joueurs valables ont voté
+  // ──────────────────────────────────────────────────────────────
+  const allVotedRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!sizing || !participants) return;
+
+    if (sizing.state !== "hidden") {
+      allVotedRef.current = false;
+      return;
+    }
+
+    const votingParticipants = participants.filter((p) => !p.isSpectator);
+    const allVoted =
+      votingParticipants.length > 0 &&
+      votingParticipants.every((p) => p.vote != null);
+
+    if (allVoted && !allVotedRef.current) {
+      if (soundEnabled) {
+        playTone(440, 0.15);
+        setTimeout(() => playTone(330, 0.25), 180);
+      }
+    }
+
+    allVotedRef.current = allVoted;
+  }, [sizing?.state, participants, soundEnabled]);
+
+  // ──────────────────────────────────────────────────────────────
+  // Détection du moment où on passe en "revealed" + check consensus
+  // ──────────────────────────────────────────────────────────────
+  const prevStateRef = React.useRef(sizing?.state);
 
   const [showVictoryConfetti, setShowVictoryConfetti] = React.useState(false);
 
@@ -96,10 +175,47 @@ export default function SizingPage({
   const celebration = sizing?.state === "revealed" && voteConsensus;
 
   React.useEffect(() => {
-    if (celebration) {
-      playFanfare();
-      setShowVictoryConfetti(true);
-      setTimeout(() => setShowVictoryConfetti(false), 9000);
+    if (!sizing || !participants) return;
+
+    const currentState = sizing.state;
+    const prevState = prevStateRef.current;
+
+    if (prevState !== "revealed" && currentState === "revealed") {
+      if (participants.length === 0) return;
+
+      const votes = participants
+        .filter((p) => !p.isSpectator)
+        .map((p) => p.vote)
+        .filter((v): v is string => v != null);
+
+      if (votes.length === 0) {
+        return;
+      }
+
+      const allSame = votes.every((v) => v === votes[0]);
+
+      if (allSame) {
+        setShowVictoryConfetti(true);
+
+        if (soundEnabled) {
+          const audio = new Audio(
+            "https://www.myinstants.com/media/sounds/06-caught-a-pokemon.mp3",
+          );
+
+          audio.volume = 0.5;
+
+          audio.play().catch((e) => console.log("Autoplay bloqué :", e));
+
+          setTimeout(() => {
+            audio.pause();
+          }, 9000);
+        }
+
+        // Reset after 9 secondes
+        setTimeout(() => {
+          setShowVictoryConfetti(false);
+        }, 9000);
+      }
     }
   }, [celebration]);
 
@@ -150,7 +266,8 @@ export default function SizingPage({
       const now = Date.now();
       return lastActive && now - lastActive < 30 * 60 * 1000; // 30minutes threshold
     })
-    .filter((p) => p.userId !== userId);
+    .filter((p) => p.userId !== userId)
+    .sort((a, b) => a.userId.localeCompare(b.userId));
   const upperHalf = Math.ceil((onlineOtherUsers.length + 1) / 2);
   const topRow = onlineOtherUsers.slice(0, upperHalf);
   const bottomRow = onlineOtherUsers.slice(upperHalf, onlineOtherUsers.length);
@@ -199,27 +316,30 @@ export default function SizingPage({
         </div>
       </div>
 
-      <div className="flex gap-1 max-sm:flex-col justify-center transition-all">
-        <div className="flex gap-2 justify-center items-end">
-          {pointCards.slice(0, 6).map((pointCard) => (
-            <PointCard
-              key={pointCard}
-              pointCard={pointCard}
-              userId={userId}
-              sizingId={params.sizingId}
-            />
-          ))}
+      <div className="flex flex-col gap-4 items-center">
+        <div className="flex gap-1 max-sm:flex-col justify-center transition-all">
+          <div className="flex gap-2 justify-center items-end">
+            {pointCards.slice(0, 6).map((pointCard) => (
+              <PointCard
+                key={pointCard}
+                pointCard={pointCard}
+                userId={userId}
+                sizingId={params.sizingId}
+              />
+            ))}
+          </div>
+          <div className="flex gap-2 justify-center items-end">
+            {pointCards.slice(6, 13).map((pointCard) => (
+              <PointCard
+                key={pointCard}
+                pointCard={pointCard}
+                userId={userId}
+                sizingId={params.sizingId}
+              />
+            ))}
+          </div>
         </div>
-        <div className="flex gap-2 justify-center items-end">
-          {pointCards.slice(6, 13).map((pointCard) => (
-            <PointCard
-              key={pointCard}
-              pointCard={pointCard}
-              userId={userId}
-              sizingId={params.sizingId}
-            />
-          ))}
-        </div>
+        <SpectatorToggle userId={userId} sizingId={params.sizingId} />
       </div>
 
       {showVictoryConfetti && (
@@ -275,11 +395,18 @@ const Participant = ({
     <Zoom>
       <div className="flex flex-col gap-2 items-center">
         {bottom && (
-          <UnitCard disabled dashed={!participant.vote}>
-            {!!participant.vote && sizing.state !== "revealed" && (
-              <img src="/pokeball.png" />
+          <UnitCard
+            disabled
+            dashed={participant.isSpectator || !participant.vote}
+          >
+            {participant.isSpectator && (
+              <Eye className="size-4 text-muted-foreground" />
             )}
-            {!!participant.vote &&
+            {!participant.isSpectator &&
+              !!participant.vote &&
+              sizing.state !== "revealed" && <img src="/pokeball.png" />}
+            {!participant.isSpectator &&
+              !!participant.vote &&
               sizing.state === "revealed" &&
               participant.vote}
           </UnitCard>
@@ -291,11 +418,18 @@ const Participant = ({
           current={currentUserId === userId}
         />
         {top && (
-          <UnitCard disabled dashed={!participant.vote}>
-            {!!participant.vote && sizing.state !== "revealed" && (
-              <img src="/pokeball.png" />
+          <UnitCard
+            disabled
+            dashed={participant.isSpectator || !participant.vote}
+          >
+            {participant.isSpectator && (
+              <Eye className="size-4 text-muted-foreground" />
             )}
-            {!!participant.vote &&
+            {!participant.isSpectator &&
+              !!participant.vote &&
+              sizing.state !== "revealed" && <img src="/pokeball.png" />}
+            {!participant.isSpectator &&
+              !!participant.vote &&
               sizing.state === "revealed" &&
               participant.vote}
           </UnitCard>
@@ -321,7 +455,11 @@ const PointCard = ({ pointCard, userId, sizingId }: PointCardProps) => {
   return (
     <UnitCard
       selected={selected}
-      className={selected ? "mb-3" : "mt-3"}
+      className={cn(
+        selected ? "mb-3" : "mt-3",
+        selfParticipant?.isSpectator &&
+          "grayscale opacity-50 border-muted-foreground",
+      )}
       onClick={() => {
         if (selfParticipant) {
           setVote({
@@ -330,9 +468,37 @@ const PointCard = ({ pointCard, userId, sizingId }: PointCardProps) => {
           });
         }
       }}
-      disabled={sizing?.state === "revealed"}
+      disabled={sizing?.state === "revealed" || selfParticipant?.isSpectator}
     >
       {pointCard}
     </UnitCard>
+  );
+};
+
+interface SpectatorToggleProps {
+  userId: string;
+  sizingId: string;
+}
+const SpectatorToggle = ({ userId, sizingId }: SpectatorToggleProps) => {
+  const selfParticipant = useQuery(api.participants.getBySizingIdAndUserId, {
+    userId,
+    sizingId,
+  });
+  const setSpectator = useMutation(api.participants.setSpectator);
+
+  if (!selfParticipant) return null;
+
+  return (
+    <Button
+      variant="secondary"
+      onClick={() =>
+        setSpectator({
+          participantId: selfParticipant._id,
+          isSpectator: !selfParticipant.isSpectator,
+        })
+      }
+    >
+      {selfParticipant.isSpectator ? "Être joueur" : "Être spectateur"}
+    </Button>
   );
 };

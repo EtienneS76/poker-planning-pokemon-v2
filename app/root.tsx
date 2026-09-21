@@ -15,6 +15,7 @@ import type { Route } from "./+types/root";
 import "./app.css";
 import { AppLayout } from "./components/AppLayout";
 import { getUserId } from "./lib/userSession.server";
+import { SoundProvider } from "./contexts/SoundContext";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -67,9 +68,11 @@ export default function App() {
   return (
     <ConvexProvider client={convex}>
       <ThemeProvider attribute="class">
-        <AppLayout>
-          <Outlet />
-        </AppLayout>
+        <SoundProvider>
+          <AppLayout>
+            <Outlet />
+          </AppLayout>
+        </SoundProvider>
       </ThemeProvider>
     </ConvexProvider>
   );

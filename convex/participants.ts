@@ -67,3 +67,17 @@ export const clearVotesBySizingId = mutation({
     }
   },
 });
+
+export const setSpectator = mutation({
+  args: {
+    participantId: v.id("participants"),
+    isSpectator: v.boolean(),
+  },
+  handler: async (ctx, { participantId, isSpectator }) => {
+    if (isSpectator) {
+      await ctx.db.patch(participantId, { isSpectator, vote: null });
+    } else {
+      await ctx.db.patch(participantId, { isSpectator });
+    }
+  },
+});

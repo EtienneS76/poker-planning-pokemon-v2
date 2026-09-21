@@ -27,6 +27,7 @@ export default defineSchema({
     userId: v.id("users"),
     unit: v.id("units"),
     vote: v.nullable(v.string()),
+    isSpectator: v.optional(v.boolean()),
   })
     .index("by_sizingId", ["sizingId"])
     .index("by_sizingId_and_userId", ["sizingId", "userId"]),
