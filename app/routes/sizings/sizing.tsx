@@ -107,30 +107,6 @@ export default function SizingPage({
   const clearVotes = useMutation(api.participants.clearVotesBySizingId);
 
   // ──────────────────────────────────────────────────────────────
-  // "Ding" quand un nouveau joueur rejoint
-  // ──────────────────────────────────────────────────────────────
-  const knownOnlineUserIdsRef = React.useRef<Set<string>>(new Set());
-
-  React.useEffect(() => {
-    if (!presenceState) return;
-
-    const currentOnlineUserIds = new Set(
-      presenceState.filter((p) => p.online).map((p) => p.userId),
-    );
-
-    const isFirstRun = knownOnlineUserIdsRef.current.size === 0;
-    const hasNewJoiner = [...currentOnlineUserIds].some(
-      (id) => !knownOnlineUserIdsRef.current.has(id),
-    );
-
-    if (!isFirstRun && hasNewJoiner && soundEnabled) {
-      playTone(880, 0.2);
-    }
-
-    knownOnlineUserIdsRef.current = currentOnlineUserIds;
-  }, [presenceState, soundEnabled]);
-
-  // ──────────────────────────────────────────────────────────────
   // "Dong" quand tous les joueurs valables ont voté
   // ──────────────────────────────────────────────────────────────
   const allVotedRef = React.useRef(false);
@@ -278,7 +254,7 @@ export default function SizingPage({
   return (
     <Slide className="flex flex-col gap-4 sm:gap-8">
       <div className="flex flex-col gap-4">
-        <div className="flex gap-4 sm:gap-8 justify-center transition-all h-[136px] sm:h-[152px]">
+        <div className="flex gap-4 sm:gap-8 justify-center transition-all h-34 sm:h-38">
           {topRow.length === 0 && <WaitingParticipants />}
           {topRow.map((p) => (
             <Participant
@@ -302,7 +278,7 @@ export default function SizingPage({
                 : "Réinitialiser"}
           </Button>
         </Card>
-        <div className="flex gap-4 sm:gap-8 justify-center transition-all h-[136px] sm:h-[152px]">
+        <div className="flex gap-4 sm:gap-8 justify-center transition-all h-34 sm:h-38">
           {bottomRow.length === 0 && <WaitingParticipants />}
           {bottomRow.map((p) => (
             <Participant
@@ -339,7 +315,6 @@ export default function SizingPage({
             ))}
           </div>
         </div>
-        <SpectatorToggle userId={userId} sizingId={params.sizingId} />
       </div>
 
       {showVictoryConfetti && (
@@ -472,33 +447,5 @@ const PointCard = ({ pointCard, userId, sizingId }: PointCardProps) => {
     >
       {pointCard}
     </UnitCard>
-  );
-};
-
-interface SpectatorToggleProps {
-  userId: string;
-  sizingId: string;
-}
-const SpectatorToggle = ({ userId, sizingId }: SpectatorToggleProps) => {
-  const selfParticipant = useQuery(api.participants.getBySizingIdAndUserId, {
-    userId,
-    sizingId,
-  });
-  const setSpectator = useMutation(api.participants.setSpectator);
-
-  if (!selfParticipant) return null;
-
-  return (
-    <Button
-      variant="secondary"
-      onClick={() =>
-        setSpectator({
-          participantId: selfParticipant._id,
-          isSpectator: !selfParticipant.isSpectator,
-        })
-      }
-    >
-      {selfParticipant.isSpectator ? "Être joueur" : "Être spectateur"}
-    </Button>
   );
 };
