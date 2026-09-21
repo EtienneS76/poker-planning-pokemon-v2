@@ -148,72 +148,11 @@ export default function SizingPage({
   }, [sizing?.state, participants, soundEnabled]);
 
   // ──────────────────────────────────────────────────────────────
-  // "Ding" quand un nouveau joueur rejoint
-  // ──────────────────────────────────────────────────────────────
-  const knownOnlineUserIdsRef = React.useRef<Set<string>>(new Set());
-
-  React.useEffect(() => {
-    if (!presenceState) return;
-
-    const currentOnlineUserIds = new Set(
-      presenceState.filter((p) => p.online).map((p) => p.userId),
-    );
-
-    const isFirstRun = knownOnlineUserIdsRef.current.size === 0;
-    const hasNewJoiner = [...currentOnlineUserIds].some(
-      (id) => !knownOnlineUserIdsRef.current.has(id),
-    );
-
-    if (!isFirstRun && hasNewJoiner && soundEnabled) {
-      playTone(880, 0.2);
-    }
-
-    knownOnlineUserIdsRef.current = currentOnlineUserIds;
-  }, [presenceState, soundEnabled]);
-
-  // ──────────────────────────────────────────────────────────────
-  // "Dong" quand tous les joueurs valables ont voté
-  // ──────────────────────────────────────────────────────────────
-  const allVotedRef = React.useRef(false);
-
-  React.useEffect(() => {
-    if (!sizing || !participants) return;
-
-    if (sizing.state !== "hidden") {
-      allVotedRef.current = false;
-      return;
-    }
-
-    const votingParticipants = participants.filter((p) => !p.isSpectator);
-    const allVoted =
-      votingParticipants.length > 0 &&
-      votingParticipants.every((p) => p.vote != null);
-
-    if (allVoted && !allVotedRef.current) {
-      if (soundEnabled) {
-        playTone(440, 0.15);
-        setTimeout(() => playTone(330, 0.25), 180);
-      }
-    }
-
-    allVotedRef.current = allVoted;
-  }, [sizing?.state, participants, soundEnabled]);
-
-  // ──────────────────────────────────────────────────────────────
   // Détection du moment où on passe en "revealed" + check consensus
   // ──────────────────────────────────────────────────────────────
   const prevStateRef = React.useRef(sizing?.state);
 
   const [showVictoryConfetti, setShowVictoryConfetti] = React.useState(false);
-
-  const voteConsensus = (() => {
-    if (!participants || participants.length <= 1) return false;
-    const votes = participants.map((p) => p.vote).filter((v) => v != null);
-    if (votes.length <= 1) return false;
-    return votes.every((v) => v === votes[0]);
-  })();
-
-  const celebration = sizing?.state === "revealed" && voteConsensus;
 
   React.useEffect(() => {
     if (!sizing || !participants) return;
@@ -221,9 +160,8 @@ export default function SizingPage({
     const currentState = sizing.state;
     const prevState = prevStateRef.current;
 
+    let confettiTimeout: number | undefined;
     if (prevState !== "revealed" && currentState === "revealed") {
-      if (participants.length === 0) return;
-
       const votes = participants
         .filter((p) => !p.isSpectator)
         .map((p) => p.vote)
@@ -247,18 +185,25 @@ export default function SizingPage({
 
           audio.play().catch((e) => console.log("Autoplay bloqué :", e));
 
-          setTimeout(() => {
+          window.setTimeout(() => {
             audio.pause();
           }, 9000);
         }
 
         // Reset after 9 secondes
-        setTimeout(() => {
+        confettiTimeout = window.setTimeout(() => {
           setShowVictoryConfetti(false);
         }, 9000);
       }
     }
-  }, [celebration]);
+
+    prevStateRef.current = currentState;
+    return () => {
+      if (confettiTimeout !== undefined) {
+        window.clearTimeout(confettiTimeout);
+      }
+    };
+  }, [sizing, participants, soundEnabled]);
 
   React.useEffect(() => {
     if (sizing && sizing.state === "countdown") {
@@ -270,13 +215,13 @@ export default function SizingPage({
       }, 1000);
       return () => clearInterval(interval);
     }
-  }, [sizing]);
+  }, [sizing?.state]);
 
   React.useEffect(() => {
     if (sizing && sizing.state !== "countdown") {
       setCountDownValue(countdownDuration);
     }
-  }, [sizing]);
+  }, [sizing?.state]);
 
   // ──────────────────────────────────────────────────────────────
   // Attrapage de Pokémon : stock de Pokéballs + tentative de capture
