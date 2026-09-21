@@ -135,6 +135,58 @@ export default function SizingPage({
   }, [sizing?.state, participants, soundEnabled]);
 
   // ──────────────────────────────────────────────────────────────
+  // "Ding" quand un nouveau joueur rejoint
+  // ──────────────────────────────────────────────────────────────
+  const knownOnlineUserIdsRef = React.useRef<Set<string>>(new Set());
+
+  React.useEffect(() => {
+    if (!presenceState) return;
+
+    const currentOnlineUserIds = new Set(
+      presenceState.filter((p) => p.online).map((p) => p.userId),
+    );
+
+    const isFirstRun = knownOnlineUserIdsRef.current.size === 0;
+    const hasNewJoiner = [...currentOnlineUserIds].some(
+      (id) => !knownOnlineUserIdsRef.current.has(id),
+    );
+
+    if (!isFirstRun && hasNewJoiner && soundEnabled) {
+      playTone(880, 0.2);
+    }
+
+    knownOnlineUserIdsRef.current = currentOnlineUserIds;
+  }, [presenceState, soundEnabled]);
+
+  // ──────────────────────────────────────────────────────────────
+  // "Dong" quand tous les joueurs valables ont voté
+  // ──────────────────────────────────────────────────────────────
+  const allVotedRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!sizing || !participants) return;
+
+    if (sizing.state !== "hidden") {
+      allVotedRef.current = false;
+      return;
+    }
+
+    const votingParticipants = participants.filter((p) => !p.isSpectator);
+    const allVoted =
+      votingParticipants.length > 0 &&
+      votingParticipants.every((p) => p.vote != null);
+
+    if (allVoted && !allVotedRef.current) {
+      if (soundEnabled) {
+        playTone(440, 0.15);
+        setTimeout(() => playTone(330, 0.25), 180);
+      }
+    }
+
+    allVotedRef.current = allVoted;
+  }, [sizing?.state, participants, soundEnabled]);
+
+  // ──────────────────────────────────────────────────────────────
   // Détection du moment où on passe en "revealed" + check consensus
   // ──────────────────────────────────────────────────────────────
   const prevStateRef = React.useRef(sizing?.state);
