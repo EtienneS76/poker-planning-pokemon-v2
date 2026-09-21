@@ -202,7 +202,7 @@ export default function SizingPage({
             "https://www.myinstants.com/media/sounds/06-caught-a-pokemon.mp3",
           );
 
-          audio.volume = 0.5;
+          audio.volume = 0.2;
 
           audio.play().catch((e) => console.log("Autoplay bloqué :", e));
 
