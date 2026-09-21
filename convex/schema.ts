@@ -20,7 +20,8 @@ export default defineSchema({
     shiny: v.boolean(),
   })
     .index("by_userId", ["userId"])
-    .index("by_userId_and_number", ["userId", "number"]),
+    .index("by_userId_and_number", ["userId", "number"])
+    .index("by_userId_and_number_and_shiny", ["userId", "number", "shiny"]),
 
   participants: defineTable({
     sizingId: v.id("sizings"),
@@ -31,4 +32,24 @@ export default defineSchema({
   })
     .index("by_sizingId", ["sizingId"])
     .index("by_sizingId_and_userId", ["sizingId", "userId"]),
+
+  pokeballStocks: defineTable({
+    sizingId: v.id("sizings"),
+    userId: v.id("users"),
+    count: v.number(),
+    lastTick: v.number(),
+  }).index("by_sizingId_and_userId", ["sizingId", "userId"]),
+
+  captureAttempts: defineTable({
+    sizingId: v.id("sizings"),
+    pokemonNumber: v.number(),
+    shiny: v.optional(v.boolean()),
+    failureCount: v.number(),
+  })
+    .index("by_sizingId_and_pokemonNumber", ["sizingId", "pokemonNumber"])
+    .index("by_sizingId_and_pokemonNumber_and_shiny", [
+      "sizingId",
+      "pokemonNumber",
+      "shiny",
+    ]),
 });

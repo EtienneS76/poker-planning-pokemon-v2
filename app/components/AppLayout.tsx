@@ -148,6 +148,7 @@ export const AppLayout = ({ children }: { children: React.ReactNode }) => {
                 <div className="grid grid-cols-4 sm:grid-cols-6 gap-4 transition-all">
                   {units.map((unit) => (
                     <UnitAvatar
+                      key={unit._id}
                       unitNumber={unit.number}
                       unitLvl={unit.lvl}
                       shiny={unit.shiny}

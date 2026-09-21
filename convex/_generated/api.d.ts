@@ -9,6 +9,7 @@
  */
 
 import type * as participants from "../participants.js";
+import type * as pokeballs from "../pokeballs.js";
 import type * as presence from "../presence.js";
 import type * as sizings from "../sizings.js";
 import type * as units from "../units.js";
@@ -22,6 +23,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   participants: typeof participants;
+  pokeballs: typeof pokeballs;
   presence: typeof presence;
   sizings: typeof sizings;
   units: typeof units;

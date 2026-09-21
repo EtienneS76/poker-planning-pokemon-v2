@@ -2,14 +2,29 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 
 export const getByUserIdAndNumber = query({
-  args: { userId: v.id("users"), number: v.number() },
-  handler: async (ctx, { userId, number }) => {
+  args: {
+    userId: v.id("users"),
+    number: v.number(),
+    shiny: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { userId, number, shiny }) => {
+    // Une version shiny et une version normale du même Pokémon peuvent
+    // coexister : on ne peut donc pas utiliser `.unique()` ici.
+    if (shiny === undefined) {
+      return await ctx.db
+        .query("units")
+        .withIndex("by_userId_and_number", (q) =>
+          q.eq("userId", userId).eq("number", number),
+        )
+        .first();
+    }
+
     return await ctx.db
       .query("units")
-      .withIndex("by_userId_and_number", (q) =>
-        q.eq("userId", userId).eq("number", number),
+      .withIndex("by_userId_and_number_and_shiny", (q) =>
+        q.eq("userId", userId).eq("number", number).eq("shiny", shiny),
       )
-      .unique();
+      .first();
   },
 });
 

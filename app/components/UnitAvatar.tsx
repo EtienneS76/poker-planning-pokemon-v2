@@ -1,5 +1,5 @@
 import { cn, getPokemonSpriteUrl } from "~/lib/utils";
-import { Sparkle } from "./animate-ui/icons/sparkle";
+import { ShinyAura } from "./ShinyAura";
 
 interface ParticipantAvatarProps {
   unitNumber: number;
@@ -16,18 +16,21 @@ export const UnitAvatar = ({
   shiny,
 }: ParticipantAvatarProps) => (
   <div className="size-16 sm:size-20 relative transition-all">
+    {shiny && <ShinyAura />}
     <img
       src={getPokemonSpriteUrl(unitNumber, shiny)}
       className={cn(
         "rounded-full border p-1 bg-card",
         current && "border-primary/60",
+        shiny && "border-yellow-300/70",
       )}
     />
     {withUnitNumber && (
       <span
         className={cn(
-          "text-xs text-foreground/80 border px-1 absolute right-0 top-0 rounded-sm bg-card",
+          "text-xs text-foreground/80 border px-1 absolute right-0 top-0 rounded-sm bg-card z-20",
           current && "border-primary/60",
+          shiny && "border-yellow-300/70",
         )}
       >
         #{unitNumber}
@@ -35,21 +38,12 @@ export const UnitAvatar = ({
     )}
     <span
       className={cn(
-        "text-xs text-foreground/80 border px-1 absolute bottom-0 right-0 rounded-sm bg-card",
+        "text-xs text-foreground/80 border px-1 absolute bottom-0 right-0 rounded-sm bg-card z-20",
         current && "border-primary/60",
+        shiny && "border-yellow-300/70",
       )}
     >
       Niv. {unitLvl}
     </span>
-    {shiny && (
-      <span
-        className={cn(
-          "text-xs text-foreground/80 px-1 absolute top-0 left-0",
-          current && "border-primary/60",
-        )}
-      >
-        <Sparkle animate="fill" className="text-yellow-300" />
-      </span>
-    )}
   </div>
 );

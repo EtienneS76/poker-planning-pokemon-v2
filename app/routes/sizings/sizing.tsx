@@ -18,6 +18,18 @@ import { UnitAvatar } from "~/components/UnitAvatar";
 import Confetti from "react-confetti";
 import { useSound } from "~/contexts/SoundContext";
 import { Eye } from "lucide-react";
+import {
+  PokeballTray,
+  type CaptureDropTarget,
+} from "~/components/capture/PokeballTray";
+import {
+  CaptureModal,
+  type CaptureResult,
+} from "~/components/capture/CaptureModal";
+import {
+  OwnedToast,
+  type OwnedToastHandle,
+} from "~/components/capture/OwnedToast";
 
 export async function loader({ request, params }: Route.LoaderArgs) {
   const { user, cookie } = await getOrCreateUser(request);
@@ -41,6 +53,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     const unit = await convexClient.query(api.units.getByUserIdAndNumber, {
       userId: user._id,
       number: unitNumber,
+      shiny,
     });
     let unitId = unit?._id;
     if (!unitId) {
@@ -265,6 +278,86 @@ export default function SizingPage({
     }
   }, [sizing]);
 
+  // ──────────────────────────────────────────────────────────────
+  // Attrapage de Pokémon : stock de Pokéballs + tentative de capture
+  // ──────────────────────────────────────────────────────────────
+  const pokeballStock = useQuery(api.pokeballs.getStock, {
+    sizingId: params.sizingId,
+    userId,
+  });
+  const tickPokeballs = useMutation(api.pokeballs.tick);
+  const attemptCapture = useMutation(api.pokeballs.attemptCapture);
+  const toastRef = React.useRef<OwnedToastHandle>(null);
+
+  const [captureModal, setCaptureModal] = React.useState<{
+    open: boolean;
+    pokemonNumber: number;
+    shiny: boolean;
+    chance: number;
+    result: CaptureResult | null;
+  } | null>(null);
+
+  const eligibleParticipantCount = presenceState?.filter(
+    (p) => p.online,
+  ).length;
+
+  React.useEffect(() => {
+    if (!sizing) return;
+    const doTick = () => {
+      tickPokeballs({
+        sizingId: sizing._id,
+        userId: userId as any,
+        eligibleParticipantCount: eligibleParticipantCount ?? 0,
+      });
+    };
+    doTick();
+    const interval = setInterval(doTick, 15000);
+    return () => clearInterval(interval);
+  }, [sizing, userId, eligibleParticipantCount, tickPokeballs]);
+
+  const handleDropOnParticipant = React.useCallback(
+    async (target: CaptureDropTarget) => {
+      if (!sizing) return;
+      if (target.userId === userId) return;
+      if (!target.unitId) return;
+
+      setCaptureModal({
+        open: true,
+        pokemonNumber: target.number,
+        shiny: target.shiny,
+        chance: 0,
+        result: null,
+      });
+
+      const res = await attemptCapture({
+        sizingId: sizing._id,
+        userId: userId as any,
+        targetUnitId: target.unitId as any,
+      });
+
+      if (res.result === "already-owned") {
+        setCaptureModal(null);
+        toastRef.current?.show(
+          target.shiny
+            ? "Tu as déjà ce Pokémon shiny dans ton Pokédex !"
+            : "Tu as déjà ce Pokémon dans ton Pokédex !",
+        );
+        return;
+      }
+
+      if (res.result === "no-pokeball") {
+        setCaptureModal(null);
+        toastRef.current?.show("Tu n'as plus de Pokéball disponible.");
+        return;
+      }
+
+      setCaptureModal((prev) =>
+        prev ? { ...prev, chance: res.chance, result: res.result } : prev,
+      );
+    },
+    [sizing, userId, attemptCapture],
+  );
+
   const toggleReveal = async () => {
     if (!sizing) return;
     if (sizing.state === "hidden") {
@@ -367,7 +460,27 @@ export default function SizingPage({
             ))}
           </div>
         </div>
+        <PokeballTray
+          count={pokeballStock?.count ?? 0}
+          maxCount={pokeballStock?.maxCount ?? 3}
+          nextTickAt={pokeballStock?.nextTickAt}
+          onDropOnTarget={handleDropOnParticipant}
+        />
       </div>
+
+      {captureModal && (
+        <CaptureModal
+          open={captureModal.open}
+          pokemonNumber={captureModal.pokemonNumber}
+          shiny={captureModal.shiny}
+          chance={captureModal.chance}
+          result={captureModal.result}
+          soundEnabled={soundEnabled}
+          onClose={() => setCaptureModal(null)}
+        />
+      )}
+
+      <OwnedToast ref={toastRef} />
 
       {showVictoryConfetti && (
         <div className="fixed inset-0 pointer-events-none z-50">
@@ -438,12 +551,24 @@ const Participant = ({
               participant.vote}
           </UnitCard>
         )}
-        <UnitAvatar
-          unitNumber={unit.number}
-          unitLvl={unit.lvl}
-          shiny={unit.shiny}
-          current={currentUserId === userId}
-        />
+        <div
+          {...(currentUserId !== userId
+            ? {
+                "data-capture-target": userId,
+                "data-capture-unit-id": unit._id,
+                "data-capture-number": unit.number,
+                "data-capture-lvl": unit.lvl,
+                "data-capture-shiny": unit.shiny ? "true" : "false",
+              }
+            : {})}
+        >
+          <UnitAvatar
+            unitNumber={unit.number}
+            unitLvl={unit.lvl}
+            shiny={unit.shiny}
+            current={currentUserId === userId}
+          />
+        </div>
         {top && (
           <UnitCard
             disabled
