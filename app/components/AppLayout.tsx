@@ -93,7 +93,7 @@ export const AppLayout = ({ children }: { children: React.ReactNode }) => {
                     }
                     className="size-6 sm:size-8 [&_svg]:size-4! sm:[&_svg]:size-6! transition-all [&_svg]:transition-all"
                   >
-                    {selfParticipant.isSpectator ? <Eye /> : <EyeOff />}
+                    {selfParticipant.isSpectator ? <EyeOff /> : <Eye />}
                   </Button>
                 }
               />
