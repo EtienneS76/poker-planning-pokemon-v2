@@ -141,7 +141,7 @@ export const AppLayout = ({ children }: { children: React.ReactNode }) => {
                   </Tooltip>
                 </span>
               </PopoverTrigger>
-              <PopoverContent className="w-auto">
+              <PopoverContent className="w-auto overflow-hidden">
                 <p className="font-semibold text-xl text-center pb-4">
                   Pokédex
                 </p>
